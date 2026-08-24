@@ -1,0 +1,7 @@
+html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: #111; }
+#unity-container { position: fixed; inset: 0; width: 100%; height: 100%; overflow: hidden; touch-action: none; overscroll-behavior: none; }
+#unity-canvas { display: block; width: 100%; height: 100%; background: #231F20; touch-action: none; user-select: none; -webkit-user-select: none; }
+#cozytd-safe-area-probe { position: fixed; inset: 0; pointer-events: none; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
+#unity-loading-bar { position: fixed; left: 10%; right: 10%; top: 50%; height: 6px; transform: translateY(-50%); background: rgba(255,255,255,.2); display: none; }
+#unity-progress-bar-full { width: 0; height: 100%; background: #fff; transition: width .1s linear; }
+#unity-warning { position: fixed; left: 5%; right: 5%; top: 5%; padding: 12px; color: #fff; text-align: center; display: none; z-index: 10; }

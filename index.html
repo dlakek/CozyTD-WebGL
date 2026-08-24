@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>CozyTD</title>
+    <link rel="stylesheet" href="TemplateData/style.css">
+  </head>
+  <body>
+    <div id="unity-container">
+      <div id="cozytd-safe-area-probe" aria-hidden="true"></div>
+      <canvas id="unity-canvas" width=960 height=600 tabindex="-1"></canvas>
+      <div id="unity-loading-bar"><div id="unity-progress-bar-full"></div></div>
+      <div id="unity-warning"></div>
+    </div>
+    <script>
+      window.__cozytdViewportState = {
+        revision: 0,
+        pixelScale: Math.max(1, window.devicePixelRatio || 1),
+        left: 0,
+        right: 0,
+        top: 0,
+        bottom: 0
+      };
+
+      (function () {
+        var canvas = document.getElementById("unity-canvas");
+        var probe = document.getElementById("cozytd-safe-area-probe");
+        var state = window.__cozytdViewportState;
+
+        function number(value) {
+          var parsed = parseFloat(value);
+          return isFinite(parsed) ? Math.max(0, parsed) : 0;
+        }
+
+        function refreshViewportState() {
+          var canvasRect = canvas.getBoundingClientRect();
+          var style = getComputedStyle(probe);
+          var viewport = window.visualViewport;
+          var visibleLeft = viewport ? viewport.offsetLeft : 0;
+          var visibleTop = viewport ? viewport.offsetTop : 0;
+          var visibleRight = viewport ? visibleLeft + viewport.width : window.innerWidth;
+          var visibleBottom = viewport ? visibleTop + viewport.height : window.innerHeight;
+          var cssLeft = Math.max(canvasRect.left, visibleLeft);
+          var cssTop = Math.max(canvasRect.top, visibleTop);
+          var cssRight = Math.min(canvasRect.right, visibleRight);
+          var cssBottom = Math.min(canvasRect.bottom, visibleBottom);
+          var safeLeft = number(style.paddingLeft);
+          var safeRight = number(style.paddingRight);
+          var safeTop = number(style.paddingTop);
+          var safeBottom = number(style.paddingBottom);
+          var canvasWidth = Math.max(1, canvasRect.width);
+          var canvasHeight = Math.max(1, canvasRect.height);
+
+          state.pixelScale = canvas.width > 0 ? canvas.width / canvasWidth : Math.max(1, window.devicePixelRatio || 1);
+          state.left = Math.max(0, safeLeft + cssLeft - canvasRect.left);
+          state.right = Math.max(0, safeRight + canvasRect.right - cssRight);
+          state.top = Math.max(0, safeTop + cssTop - canvasRect.top);
+          state.bottom = Math.max(0, safeBottom + canvasRect.bottom - cssBottom);
+          state.revision++;
+        }
+
+        new ResizeObserver(refreshViewportState).observe(canvas);
+        new MutationObserver(refreshViewportState).observe(canvas, { attributes: true, attributeFilter: ["width", "height"] });
+        window.addEventListener("resize", refreshViewportState, { passive: true });
+        window.addEventListener("orientationchange", refreshViewportState, { passive: true });
+        window.addEventListener("fullscreenchange", refreshViewportState, { passive: true });
+        if (window.visualViewport) {
+          window.visualViewport.addEventListener("resize", refreshViewportState, { passive: true });
+          window.visualViewport.addEventListener("scroll", refreshViewportState, { passive: true });
+        }
+        refreshViewportState();
+      })();
+
+      var canvas = document.getElementById("unity-canvas");
+      var warningBanner = document.getElementById("unity-warning");
+      function unityShowBanner(message, type) {
+        warningBanner.textContent = message;
+        warningBanner.style.display = "block";
+        warningBanner.style.background = type === "error" ? "#b3261e" : "#f9ab00";
+      }
+
+      var buildUrl = "Build";
+      var loaderUrl = buildUrl + "/outputs-preview.loader.js";
+      var config = {
+        dataUrl: buildUrl + "/outputs-preview.data.unityweb",
+        frameworkUrl: buildUrl + "/outputs-preview.framework.js.unityweb",
+        codeUrl: buildUrl + "/outputs-preview.wasm.unityweb",
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: "com.dlakek.cozytd",
+        productName: "CozyTD",
+        productVersion: "0.1.0",
+        showBanner: unityShowBanner
+      };
+
+      document.getElementById("unity-loading-bar").style.display = "block";
+      var script = document.createElement("script");
+      script.src = loaderUrl;
+      script.onload = function () {
+        createUnityInstance(canvas, config, function (progress) {
+          document.getElementById("unity-progress-bar-full").style.width = (100 * progress) + "%";
+        }).then(function () {
+          document.getElementById("unity-loading-bar").style.display = "none";
+        }).catch(function (message) {
+          unityShowBanner(message, "error");
+        });
+      };
+      document.body.appendChild(script);
+    </script>
+  </body>
+</html>
