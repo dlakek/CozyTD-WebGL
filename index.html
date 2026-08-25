@@ -17,6 +17,8 @@
     <script>
       window.__cozytdViewportState = {
         revision: 0,
+        renderWidth: 0,
+        renderHeight: 0,
         pixelScale: Math.max(1, window.devicePixelRatio || 1),
         left: 0,
         right: 0,
@@ -25,9 +27,11 @@
       };
 
       (function () {
+        var resizeSettleDelayMs = 150;
         var canvas = document.getElementById("unity-canvas");
         var probe = document.getElementById("cozytd-safe-area-probe");
         var state = window.__cozytdViewportState;
+        var resizeTimer = 0;
 
         function number(value) {
           var parsed = parseFloat(value);
@@ -53,24 +57,57 @@
           var canvasWidth = Math.max(1, canvasRect.width);
           var canvasHeight = Math.max(1, canvasRect.height);
 
-          state.pixelScale = canvas.width > 0 ? canvas.width / canvasWidth : Math.max(1, window.devicePixelRatio || 1);
-          state.left = Math.max(0, safeLeft + cssLeft - canvasRect.left);
-          state.right = Math.max(0, safeRight + canvasRect.right - cssRight);
-          state.top = Math.max(0, safeTop + cssTop - canvasRect.top);
-          state.bottom = Math.max(0, safeBottom + canvasRect.bottom - cssBottom);
+          var pixelScale = canvas.width > 0 ? canvas.width / canvasWidth : Math.max(1, window.devicePixelRatio || 1);
+          var left = Math.max(0, safeLeft + cssLeft - canvasRect.left);
+          var right = Math.max(0, safeRight + canvasRect.right - cssRight);
+          var top = Math.max(0, safeTop + cssTop - canvasRect.top);
+          var bottom = Math.max(0, safeBottom + canvasRect.bottom - cssBottom);
+          if (state.renderWidth === canvas.width &&
+              state.renderHeight === canvas.height &&
+              Math.abs(state.pixelScale - pixelScale) < 0.001 &&
+              Math.abs(state.left - left) < 0.01 &&
+              Math.abs(state.right - right) < 0.01 &&
+              Math.abs(state.top - top) < 0.01 &&
+              Math.abs(state.bottom - bottom) < 0.01) {
+            return;
+          }
+
+          state.renderWidth = canvas.width;
+          state.renderHeight = canvas.height;
+          state.pixelScale = pixelScale;
+          state.left = left;
+          state.right = right;
+          state.top = top;
+          state.bottom = bottom;
           state.revision++;
         }
 
-        new ResizeObserver(refreshViewportState).observe(canvas);
-        new MutationObserver(refreshViewportState).observe(canvas, { attributes: true, attributeFilter: ["width", "height"] });
-        window.addEventListener("resize", refreshViewportState, { passive: true });
-        window.addEventListener("orientationchange", refreshViewportState, { passive: true });
-        window.addEventListener("fullscreenchange", refreshViewportState, { passive: true });
+        function resizeRenderTarget() {
+          var canvasRect = canvas.getBoundingClientRect();
+          var pixelRatio = Math.max(1, window.devicePixelRatio || 1);
+          var width = Math.max(1, Math.round(canvasRect.width * pixelRatio));
+          var height = Math.max(1, Math.round(canvasRect.height * pixelRatio));
+          if (canvas.width !== width || canvas.height !== height) {
+            canvas.width = width;
+            canvas.height = height;
+          }
+          refreshViewportState();
+        }
+
+        function scheduleRenderTargetResize() {
+          window.clearTimeout(resizeTimer);
+          resizeTimer = window.setTimeout(resizeRenderTarget, resizeSettleDelayMs);
+        }
+
+        new ResizeObserver(scheduleRenderTargetResize).observe(canvas);
+        window.addEventListener("resize", scheduleRenderTargetResize, { passive: true });
+        window.addEventListener("orientationchange", scheduleRenderTargetResize, { passive: true });
+        window.addEventListener("fullscreenchange", scheduleRenderTargetResize, { passive: true });
         if (window.visualViewport) {
-          window.visualViewport.addEventListener("resize", refreshViewportState, { passive: true });
+          window.visualViewport.addEventListener("resize", scheduleRenderTargetResize, { passive: true });
           window.visualViewport.addEventListener("scroll", refreshViewportState, { passive: true });
         }
-        refreshViewportState();
+        resizeRenderTarget();
       })();
 
       var canvas = document.getElementById("unity-canvas");
@@ -91,6 +128,7 @@
         companyName: "com.dlakek.cozytd",
         productName: "CozyTD",
         productVersion: "0.1.0",
+        matchWebGLToCanvasSize: false,
         showBanner: unityShowBanner
       };
 
