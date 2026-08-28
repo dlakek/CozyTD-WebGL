@@ -1,0 +1,12 @@
+{
+    "schemaVersion": 1,
+    "files": [
+        ".nojekyll",
+        "Build/outputs-release.data.unityweb",
+        "Build/outputs-release.framework.js.unityweb",
+        "Build/outputs-release.loader.js",
+        "Build/outputs-release.wasm.unityweb",
+        "TemplateData/style.css",
+        "index.html"
+    ]
+}

@@ -5,7 +5,7 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>CozyTD</title>
-    <link rel="stylesheet" href="TemplateData/style.css">
+    <link rel="stylesheet" href="TemplateData/style.css?v=ac70ad2b3e45008c">
   </head>
   <body>
     <div id="unity-container">
@@ -118,12 +118,96 @@
         warningBanner.style.background = type === "error" ? "#b3261e" : "#f9ab00";
       }
 
+      var transientRetryDelaysMs = [1000, 2000, 4000];
+
+      function waitForRetry(delayMs) {
+        return new Promise(function (resolve) {
+          window.setTimeout(resolve, delayMs);
+        });
+      }
+
+      function isRetryableHttpStatus(status) {
+        return status === 404 ||
+          status === 408 ||
+          status === 425 ||
+          status === 429 ||
+          status === 500 ||
+          status === 502 ||
+          status === 503 ||
+          status === 504;
+      }
+
+      function isBuildAssetRequest(input, init) {
+        var method = init && init.method;
+        if (!method && input && typeof input === "object" && input.method)
+          method = input.method;
+        method = (method || "GET").toUpperCase();
+        if (method !== "GET" && method !== "HEAD")
+          return false;
+
+        try {
+          var rawUrl = typeof input === "string"
+            ? input
+            : input && input.url
+              ? input.url
+              : String(input);
+          var requestUrl = new URL(rawUrl, window.location.href);
+          var buildRoot = new URL("Build/", window.location.href);
+          return requestUrl.origin === buildRoot.origin &&
+            requestUrl.pathname.indexOf(buildRoot.pathname) === 0;
+        } catch (error) {
+          return false;
+        }
+      }
+
+      function scheduleBuildAssetRetry(nativeFetch, input, init, attempt, error) {
+        if (attempt >= transientRetryDelaysMs.length)
+          return Promise.reject(error);
+
+        var delayMs = transientRetryDelaysMs[attempt];
+        console.warn(
+          "Retrying WebGL build asset request in " + delayMs + "ms (attempt " + (attempt + 2) + ").",
+          error);
+        return waitForRetry(delayMs).then(function () {
+          return retryBuildAssetFetch(nativeFetch, input, init, attempt + 1);
+        });
+      }
+
+      function retryBuildAssetFetch(nativeFetch, input, init, attempt) {
+        return nativeFetch(input, init).then(function (response) {
+          if (response.ok || response.status === 304)
+            return response;
+
+          var error = new Error(
+            "WebGL build asset request failed: HTTP " + response.status + " " + response.url);
+          if (!isRetryableHttpStatus(response.status))
+            throw error;
+
+          return scheduleBuildAssetRetry(nativeFetch, input, init, attempt, error);
+        }, function (error) {
+          return scheduleBuildAssetRetry(nativeFetch, input, init, attempt, error);
+        });
+      }
+
+      function installBuildAssetFetchRetry() {
+        var nativeFetch = window.fetch.bind(window);
+        window.fetch = function (input, init) {
+          if (!isBuildAssetRequest(input, init))
+            return nativeFetch(input, init);
+          return retryBuildAssetFetch(nativeFetch, input, init, 0);
+        };
+      }
+
+      installBuildAssetFetchRetry();
+
       var buildUrl = "Build";
-      var loaderUrl = buildUrl + "/outputs.loader.js";
+      var assetVersion = "ac70ad2b3e45008c";
+      var versionQuery = "?v=" + encodeURIComponent(assetVersion);
+      var loaderUrl = buildUrl + "/outputs-release.loader.js" + versionQuery;
       var config = {
-        dataUrl: buildUrl + "/outputs.data.unityweb",
-        frameworkUrl: buildUrl + "/outputs.framework.js.unityweb",
-        codeUrl: buildUrl + "/outputs.wasm.unityweb",
+        dataUrl: buildUrl + "/outputs-release.data.unityweb" + versionQuery,
+        frameworkUrl: buildUrl + "/outputs-release.framework.js.unityweb" + versionQuery,
+        codeUrl: buildUrl + "/outputs-release.wasm.unityweb" + versionQuery,
         streamingAssetsUrl: "StreamingAssets",
         companyName: "com.dlakek.cozytd",
         productName: "CozyTD",
@@ -133,18 +217,37 @@
       };
 
       document.getElementById("unity-loading-bar").style.display = "block";
-      var script = document.createElement("script");
-      script.src = loaderUrl;
-      script.onload = function () {
-        createUnityInstance(canvas, config, function (progress) {
-          document.getElementById("unity-progress-bar-full").style.width = (100 * progress) + "%";
-        }).then(function () {
-          document.getElementById("unity-loading-bar").style.display = "none";
-        }).catch(function (message) {
-          unityShowBanner(message, "error");
-        });
-      };
-      document.body.appendChild(script);
+
+      function startUnityLoader(attempt) {
+        var script = document.createElement("script");
+        script.src = loaderUrl;
+        script.onload = function () {
+          createUnityInstance(canvas, config, function (progress) {
+            document.getElementById("unity-progress-bar-full").style.width = (100 * progress) + "%";
+          }).then(function () {
+            document.getElementById("unity-loading-bar").style.display = "none";
+          }).catch(function (message) {
+            unityShowBanner(message, "error");
+          });
+        };
+        script.onerror = function () {
+          script.remove();
+          if (attempt >= transientRetryDelaysMs.length) {
+            unityShowBanner("Failed to load the Unity WebGL loader after retries.", "error");
+            return;
+          }
+
+          var delayMs = transientRetryDelaysMs[attempt];
+          console.warn(
+            "Retrying Unity WebGL loader in " + delayMs + "ms (attempt " + (attempt + 2) + ").");
+          window.setTimeout(function () {
+            startUnityLoader(attempt + 1);
+          }, delayMs);
+        };
+        document.body.appendChild(script);
+      }
+
+      startUnityLoader(0);
     </script>
   </body>
 </html>
